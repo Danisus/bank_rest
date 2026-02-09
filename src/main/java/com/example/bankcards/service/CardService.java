@@ -1,6 +1,7 @@
 package com.example.bankcards.service;
 
 import com.example.bankcards.dto.CardResponseDto;
+import com.example.bankcards.dto.TransferRequestDto;
 import com.example.bankcards.entity.Card;
 import com.example.bankcards.entity.Status;
 import com.example.bankcards.entity.User;
@@ -102,14 +103,14 @@ public class CardService {
     }
 
     @Transactional
-    public List<CardResponseDto> transfer(Long fromCardId, Long toCardId, BigDecimal amount){
-        Card fromCard = cardRepository.findById(fromCardId).orElseThrow(() -> new RuntimeException("fromCard not found"));
-        Card toCard = cardRepository.findById(toCardId).orElseThrow(() -> new RuntimeException("toCard not found"));
+    public List<CardResponseDto> transfer(TransferRequestDto requestDto){
+        Card fromCard = cardRepository.findById(requestDto.getFromCardId()).orElseThrow(() -> new RuntimeException("fromCard not found"));
+        Card toCard = cardRepository.findById(requestDto.getToCardId()).orElseThrow(() -> new RuntimeException("toCard not found"));
         if (fromCard.getStatus() != Status.ACTIVE)
             throw new RuntimeException("fromCard is not ACTIVE");
         if (toCard.getStatus() != Status.ACTIVE)
             throw new RuntimeException("toCard is not ACTIVE");
-        if (fromCard.getBalance().compareTo(amount) == -1)
+        if (fromCard.getBalance().compareTo(requestDto.getAmount()) == -1)
             throw new RuntimeException("there are insufficient funds in the account");
         if (fromCard.getUser().getId() != toCard.getUser().getId())
             throw new RuntimeException("fromCard is not the same user as toCard");
@@ -118,8 +119,8 @@ public class CardService {
         if (toCard.getExpirationDate().isBefore(LocalDate.now()))
             throw new RuntimeException("toCard expired");
 
-        fromCard.setBalance(fromCard.getBalance().subtract(amount));
-        toCard.setBalance(toCard.getBalance().add(amount));
+        fromCard.setBalance(fromCard.getBalance().subtract(requestDto.getAmount()));
+        toCard.setBalance(toCard.getBalance().add(requestDto.getAmount()));
 
         List<CardResponseDto> cards = new ArrayList<>();
         cards.add(toResponseDto(cardRepository.save(fromCard)));
