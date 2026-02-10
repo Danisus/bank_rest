@@ -7,6 +7,7 @@ import com.example.bankcards.entity.Status;
 import com.example.bankcards.entity.User;
 import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.UserRepository;
+import com.example.bankcards.util.SecurityUtil;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +27,7 @@ public class CardService {
     private final CardRepository cardRepository;
     private final UserRepository userRepository;
     private final Random random = new Random();
+    private final SecurityUtil securityUtil;
     @Transactional
     public CardResponseDto createCard(Long userId){
         String numberCard = "";
@@ -80,11 +82,47 @@ public class CardService {
         return cards.map(this::toResponseDto);
     }
 
+    public Page<CardResponseDto> findMyCards(Pageable pageable) {
+        Long currentUserId = securityUtil.getCurrentUserId();
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Page<Card> cards = cardRepository.findByUser(user, pageable);
+        return cards.map(this::toResponseDto);
+    }
+
+    @Transactional
+    public CardResponseDto deposit(Long cardId, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Amount must be positive");
+        }
+
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new RuntimeException("Card not found"));
+
+        if (card.getStatus() != Status.ACTIVE) {
+            throw new RuntimeException("Card is not ACTIVE");
+        }
+        Long currentUserId = securityUtil.getCurrentUserId();
+        if (!card.getUser().getId().equals(currentUserId)) {
+            throw new RuntimeException("Not your card");
+        }
+
+        card.setBalance(card.getBalance().add(amount));
+        cardRepository.save(card);
+
+        return toResponseDto(card);
+    }
+
     @Transactional
     public CardResponseDto blockCard(Long cardId){
         Card card = cardRepository.findById(cardId).orElseThrow(() -> new RuntimeException("card not found"));
         if (card.getStatus() == Status.BLOCKED)
             return toResponseDto(card);
+        Long currentUserId = securityUtil.getCurrentUserId();
+        if (!card.getUser().getId().equals(currentUserId)) {
+            throw new RuntimeException("Not your card");
+        }
+
         card.setStatus(Status.BLOCKED);
         cardRepository.save(card);
         return toResponseDto(card);
@@ -97,6 +135,10 @@ public class CardService {
             return toResponseDto(card);
         if (card.getExpirationDate().isBefore(LocalDate.now()))
             return toResponseDto(card);
+        Long currentUserId = securityUtil.getCurrentUserId();
+        if (!card.getUser().getId().equals(currentUserId)) {
+            throw new RuntimeException("Not your card");
+        }
         card.setStatus(Status.ACTIVE);
         cardRepository.save(card);
         return toResponseDto(card);
@@ -118,6 +160,14 @@ public class CardService {
             throw new RuntimeException("fromCard expired");
         if (toCard.getExpirationDate().isBefore(LocalDate.now()))
             throw new RuntimeException("toCard expired");
+
+        Long currentUserId = securityUtil.getCurrentUserId();
+        if (!fromCard.getUser().getId().equals(currentUserId)) {
+            throw new RuntimeException("Not your card");
+        }
+        if (!toCard.getUser().getId().equals(currentUserId)) {
+            throw new RuntimeException("Not your card");
+        }
 
         fromCard.setBalance(fromCard.getBalance().subtract(requestDto.getAmount()));
         toCard.setBalance(toCard.getBalance().add(requestDto.getAmount()));
