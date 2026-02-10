@@ -39,4 +39,5 @@ Swagger: http://localhost:8080/swagger-ui.html
 ## Тесты
 JUnit + Mockito для CardService.
 
-Repo: https://github.com/Danisus/bank-rest-test
+Repo: https://github.com/Danisus/bank_rest
+
